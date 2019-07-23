@@ -222,7 +222,7 @@ function sumfields_sql_rewrite($sql) {
   $values = array_values($fiscal_dates);
   array_walk($values, 'sumfields_force_date');
   $sql = str_replace($keys, $values, $sql);
-  
+
   return $sql;
 }
 
@@ -292,12 +292,12 @@ function sumfields_zero_pad($num) {
  **/
 
 function sumfields_civicrm_triggerInfo(&$info, $tableName) {
-  
+
   // Do a check if we are running through triggers or cronjob. We don't want
   // use system resources
-  $data_update_method = sumfields_get_setting('data_update_method','default');  
-  if ($data_update_method == 'via_triggers') {  
-  
+  $data_update_method = sumfields_get_setting('data_update_method','default');
+  if ($data_update_method == 'via_triggers') {
+
     // Our triggers all use custom fields. CiviCRM, when generating
     // custom fields, sometimes gives them different names (appending
     // the id in most cases) to avoid name collisions.
@@ -315,7 +315,7 @@ function sumfields_civicrm_triggerInfo(&$info, $tableName) {
     // We create a trigger sql statement for each table that should
     // have a trigger
     $tables = array();
-    
+
     $generic_sql = "INSERT INTO `$table_name` SET ";
     $sql_field_parts = array();
 
@@ -461,7 +461,7 @@ function sumfields_create_temporary_table($trigger_table) {
  * @return bool
  *   TRUE if successful, FALSE otherwise
  */
-function sumfields_generate_data_based_on_current_data($session = NULL) {
+function sumfields_generate_data_based_on_current_data($session = NULL, $contacts_ids = NULL) {
   // Get the actual table name for summary fields.
   $table_name = _sumfields_get_custom_table_name();
 
@@ -482,8 +482,10 @@ function sumfields_generate_data_based_on_current_data($session = NULL) {
 
   // In theory we shouldn't have to truncate the table, but we
   // are doing it just to be sure it's empty.
-  $sql = "TRUNCATE TABLE `$table_name`";
-  $dao = CRM_Core_DAO::executeQuery($sql);
+  if($contacts_ids == NULL) {
+    $sql = "TRUNCATE TABLE `$table_name`";
+    $dao = CRM_Core_DAO::executeQuery($sql);
+  }
 
   // Load the field and group definitions because we need the trigger
   // clause that is stored here. These are the generically shipped
@@ -562,10 +564,14 @@ function sumfields_generate_data_based_on_current_data($session = NULL) {
   foreach ($temp_sql as $table => $data) {
     // Calculate data and insert into temp table
     $query = "INSERT INTO `{$data['temp_table']}` SELECT contact_id, "
-      . implode(",\n", $data['triggers'])
-      . " FROM `$table` AS trigger_table "
-      . $data['initialize_join'] 
-      . ' GROUP BY contact_id';
+        . implode(",\n", $data['triggers'])
+        . " FROM `$table` AS trigger_table "
+        . $data['initialize_join'];
+
+    if ($contacts_ids != NULL) {
+      $query .= ' WHERE contact_id IN (' . $contacts_ids  . ')';
+    }
+    $query .= ' GROUP BY contact_id ';
 
     CRM_Core_DAO::executeQuery($query);
 
